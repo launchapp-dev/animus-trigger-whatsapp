@@ -1,0 +1,74 @@
+# Static plugin metadata for `animus-trigger-whatsapp`.
+#
+# Animus's primary discovery surface is the executable's `--manifest` JSON
+# output (printed by `src/index.ts` via the SDK helpers). This `plugin.toml`
+# mirrors that data for static tooling (CI lint, `animus plugin info` against
+# an uninstalled tree, the `animus.plugins` registry yaml).
+#
+# Keep this in sync with the manifest built in `src/index.ts`.
+
+schema       = "animus.plugin.v1"
+name         = "animus-trigger-whatsapp"
+version      = "0.1.0"
+plugin_kind  = "trigger_backend"
+description  = "WhatsApp Business Cloud API trigger - inbound webhook receiver + outbound Graph API sender"
+protocol     = "stdio"
+
+[binary]
+default = "animus-trigger-whatsapp"
+
+[capabilities]
+streaming    = true
+progress     = false
+cancellation = false
+methods      = [
+  "trigger/schema",
+  "trigger/watch",
+  "trigger/ack",
+  "whatsapp/send_text",
+  "whatsapp/send_template",
+  "whatsapp/send_media",
+  "health/check",
+]
+
+[[env]]
+key         = "WHATSAPP_ACCESS_TOKEN"
+description = "Meta Graph API access token (system-user or temporary). See https://developers.facebook.com/docs/whatsapp/cloud-api/get-started"
+required    = true
+sensitive   = true
+
+[[env]]
+key         = "WHATSAPP_PHONE_NUMBER_ID"
+description = "WABA phone-number-id used as the sender (NOT the display number itself)."
+required    = true
+sensitive   = false
+
+[[env]]
+key         = "WHATSAPP_VERIFY_TOKEN"
+description = "Operator-chosen shared secret used during Meta webhook GET verification handshake."
+required    = true
+sensitive   = true
+
+[[env]]
+key         = "WHATSAPP_APP_SECRET"
+description = "Meta App Secret used to validate inbound X-Hub-Signature-256 HMACs on webhook POSTs."
+required    = true
+sensitive   = true
+
+[[env]]
+key         = "WHATSAPP_WEBHOOK_PORT"
+description = "Local TCP port the embedded HTTP webhook server binds to (default 8089)."
+required    = false
+sensitive   = false
+
+[[env]]
+key         = "WHATSAPP_WEBHOOK_PATH"
+description = "Path the webhook server listens on (default /webhook)."
+required    = false
+sensitive   = false
+
+[[env]]
+key         = "WHATSAPP_GRAPH_API_BASE"
+description = "Override the Graph API base URL (default https://graph.facebook.com/v22.0)."
+required    = false
+sensitive   = false
