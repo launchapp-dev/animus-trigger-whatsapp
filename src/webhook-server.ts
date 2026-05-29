@@ -26,6 +26,9 @@ export interface WebhookServerOptions {
   /** Operator-supplied Meta App Secret. When empty, signature checks are
    *  SKIPPED and every POST is logged with a warning. */
   appSecret: string;
+  /** Logical Animus trigger id stamped onto emitted events so the daemon
+   *  router can match them to a `WorkflowTrigger`. May be empty. */
+  triggerId?: string;
   /** Called for every parsed inbound TriggerEvent. */
   onEvent: (event: TriggerEvent) => void | Promise<void>;
   /** Optional diagnostic sink; defaults to stderr. Stdout is reserved for
@@ -157,12 +160,12 @@ export function startWebhookServer(opts: WebhookServerOptions): Promise<WebhookS
       return;
     }
 
-    const events = mapWebhookEnvelope(envelope);
+    const events = mapWebhookEnvelope(envelope, opts.triggerId ?? "");
     for (const ev of events) {
       try {
         await opts.onEvent(ev);
       } catch (err) {
-        log(`onEvent handler threw for ${ev.id}: ${String(err)}`);
+        log(`onEvent handler threw for ${ev.event_id}: ${String(err)}`);
       }
     }
     // Always 200 once we've parsed the body — per Meta, anything else triggers

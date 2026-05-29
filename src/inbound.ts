@@ -6,21 +6,26 @@
 // TriggerEvent per inbound message, keyed by Meta's `id` so the daemon can
 // dedupe redelivered events.
 //
-// v0.1.0 emits a single Animus event kind, `whatsapp.message`, with the
-// original Meta message JSON preserved verbatim under `payload` so workflow
-// YAML can template against `{{trigger.payload.text.body}}`,
-// `{{trigger.payload.from}}`, etc.
+// v0.1.1 emits the flat `TriggerEvent` wire shape the daemon's
+// `trigger_supervisor` actually deserializes (see
+// `crates/animus-plugin-protocol/src/lib.rs::TriggerEvent` and
+// `crates/orchestrator-daemon-runtime/src/schedule/trigger_supervisor.rs:289`).
+// The Meta message JSON is preserved verbatim under `payload.message` so
+// workflow YAML can template against `{{trigger.payload.message.text.body}}`,
+// `{{trigger.payload.message.from}}`, etc. The `kind` discriminator and the
+// Meta-derived `occurred_at` timestamp ride along inside `payload` for
+// downstream consumers.
 
 export const KIND_WHATSAPP_MESSAGE = "whatsapp.message";
 export const ACTION_HINT_CREATE_TASK = "create_task";
 
 export interface TriggerEvent {
-  id: string;
-  occurred_at: string;
-  kind: string;
-  payload: unknown;
+  event_id: string;
+  trigger_id: string | null;
   subject_id?: string | null;
-  action_hint?: string | null;
+  subject_kind?: string | null;
+  action_hint: string | null;
+  payload: unknown;
 }
 
 interface MetaMessage {
@@ -93,10 +98,19 @@ function buildEventId(phoneNumberId: string | undefined, msgId: string | undefin
  * Walk a Meta webhook envelope and emit one TriggerEvent per inbound
  * `messages[]` entry. Statuses (delivered / read receipts) are intentionally
  * ignored in v0.1.0.
+ *
+ * `triggerId` is stamped onto every emitted event so the daemon's
+ * `route_event` can match it to a `WorkflowTrigger` in project YAML. Pass an
+ * empty string when no operator-configured id is available — the host will
+ * log and drop the event, but at least the wire shape is well-formed.
  */
-export function mapWebhookEnvelope(envelope: MetaWebhookEnvelope): TriggerEvent[] {
+export function mapWebhookEnvelope(
+  envelope: MetaWebhookEnvelope,
+  triggerId = "",
+): TriggerEvent[] {
   const out: TriggerEvent[] = [];
   if (envelope.object !== "whatsapp_business_account") return out;
+  const trigger_id = triggerId.length > 0 ? triggerId : null;
   for (const entry of envelope.entry ?? []) {
     for (const change of entry.changes ?? []) {
       if (change.field !== "messages") continue;
@@ -108,16 +122,16 @@ export function mapWebhookEnvelope(envelope: MetaWebhookEnvelope): TriggerEvent[
         const msgType = typeof msg.type === "string" ? msg.type : "unknown";
         if (!SUPPORTED_MESSAGE_TYPES.has(msgType)) continue;
         out.push({
-          id: buildEventId(phoneNumberId, msg.id),
-          occurred_at: parseMetaTimestamp(msg.timestamp),
-          kind: KIND_WHATSAPP_MESSAGE,
+          event_id: buildEventId(phoneNumberId, msg.id),
+          trigger_id,
           payload: {
+            kind: KIND_WHATSAPP_MESSAGE,
+            occurred_at: parseMetaTimestamp(msg.timestamp),
             message: msg,
             metadata: value.metadata ?? null,
             contacts: value.contacts ?? null,
             entry_id: entry.id ?? null,
           },
-          subject_id: null,
           action_hint: ACTION_HINT_CREATE_TASK,
         });
       }

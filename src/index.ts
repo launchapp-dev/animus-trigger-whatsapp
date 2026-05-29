@@ -56,7 +56,7 @@ import {
 } from "./outbound.js";
 
 const PLUGIN_NAME = "animus-trigger-whatsapp";
-const PLUGIN_VERSION = "0.1.0";
+const PLUGIN_VERSION = "0.1.1";
 const PLUGIN_DESCRIPTION =
   "WhatsApp Business Cloud API trigger - inbound webhook receiver + outbound Graph API sender";
 
@@ -126,6 +126,14 @@ const manifest = buildManifest(identity, capabilities, {
       required: false,
       sensitive: false,
     },
+    {
+      name: "WHATSAPP_TRIGGER_ID",
+      description:
+        "Logical Animus trigger id (matches the `id` of a `WorkflowTrigger` in project YAML). " +
+        "Stamped onto every emitted TriggerEvent so the daemon router can match it; events without it are dropped.",
+      required: false,
+      sensitive: false,
+    },
   ],
 });
 
@@ -170,8 +178,25 @@ function buildHealth(cfg: WhatsAppConfig): {
   return { status: "healthy", uptime_ms: null, memory_usage_bytes: null, last_error: null };
 }
 
+function extractWatchTriggerId(params: Record<string, unknown>): string | null {
+  // Sibling trigger plugins (email, slack, etc.) accept the logical trigger
+  // id at the top level (`params.trigger_id`) as a forward-compat hedge for
+  // a future host that augments `TriggerWatchParams`. We also accept it
+  // nested under `params.config.trigger_id`, matching the
+  // `TriggerWatchParams.config` free-form `Value`. The daemon currently
+  // sends `TriggerWatchParams::default()` (empty); both shapes are reserved
+  // for manual wiring or future host evolution.
+  const topLevel = params["trigger_id"];
+  if (typeof topLevel === "string" && topLevel.length > 0) return topLevel;
+  const cfg = params["config"];
+  if (!cfg || typeof cfg !== "object") return null;
+  const candidate = (cfg as Record<string, unknown>)["trigger_id"];
+  return typeof candidate === "string" && candidate.length > 0 ? candidate : null;
+}
+
 async function handleTriggerWatch(
   id: string | number | null,
+  params: Record<string, unknown>,
   cfg: WhatsAppConfig,
   wire: Wire,
 ): Promise<RpcResponse> {
@@ -186,22 +211,35 @@ async function handleTriggerWatch(
       "trigger/watch already active; only one webhook listener per process",
     );
   }
-  // The protocol spec (see animus-protocol/spec.md §trigger/event) requires
-  // `params.id` to echo the originating watch request id and `params.event`
-  // to carry the full TriggerEvent body. Capture the id here so the webhook
-  // callback can stamp every emitted notification with it.
+  // The live daemon trigger supervisor deserializes
+  // `trigger/event` notification `params` directly into
+  // `animus_plugin_protocol::TriggerEvent` (see
+  // `crates/orchestrator-daemon-runtime/src/schedule/trigger_supervisor.rs`
+  // around line 289). The earlier `{ id, event }` wrapper from spec.md §7.3
+  // is stale — events sent that way are silently dropped at runtime.
+  //
+  // Beyond the wire shape, `route_event` (same file, ~line 602) also drops
+  // any `TriggerEvent` with `trigger_id: None`. Prefer the per-call
+  // `params.config.trigger_id` overlay, fall back to the operator-configured
+  // `WHATSAPP_TRIGGER_ID` env var.
   const watchRequestId = id;
+  const triggerId = extractWatchTriggerId(params) ?? cfg.triggerId ?? "";
+  if (!triggerId) {
+    process.stderr.write(
+      `[${PLUGIN_NAME}] WARN trigger/watch started without a trigger_id ` +
+        `(set WHATSAPP_TRIGGER_ID or pass params.config.trigger_id). ` +
+        `Events will be dropped by the host router until one is configured.\n`,
+    );
+  }
   try {
     const server = await startWebhookServer({
       port: cfg.webhookPort,
       path: cfg.webhookPath,
       verifyToken: cfg.verifyToken,
       appSecret: cfg.appSecret,
+      triggerId,
       onEvent: (event: TriggerEvent) => {
-        void wire.notify("trigger/event", {
-          id: watchRequestId,
-          event,
-        });
+        void wire.notify("trigger/event", event);
       },
     });
     activeWatch = { watchRequestId, wire, server };
@@ -324,7 +362,7 @@ async function dispatch(
         supports_ack: true,
       });
     case "trigger/watch":
-      return handleTriggerWatch(id, cfg, wire);
+      return handleTriggerWatch(id, params, cfg, wire);
     case "trigger/ack":
       return handleTriggerAck(id, params);
     case "whatsapp/send_text":

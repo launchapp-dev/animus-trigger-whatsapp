@@ -9,7 +9,7 @@
 
 schema       = "animus.plugin.v1"
 name         = "animus-trigger-whatsapp"
-version      = "0.1.0"
+version      = "0.1.1"
 plugin_kind  = "trigger_backend"
 description  = "WhatsApp Business Cloud API trigger - inbound webhook receiver + outbound Graph API sender"
 protocol     = "stdio"
@@ -70,5 +70,11 @@ sensitive   = false
 [[env]]
 key         = "WHATSAPP_GRAPH_API_BASE"
 description = "Override the Graph API base URL (default https://graph.facebook.com/v22.0)."
+required    = false
+sensitive   = false
+
+[[env]]
+key         = "WHATSAPP_TRIGGER_ID"
+description = "Logical Animus trigger id (matches the `id` of a `WorkflowTrigger` in project YAML). Stamped onto every emitted TriggerEvent so the daemon router can match it; events without it are dropped by the host."
 required    = false
 sensitive   = false

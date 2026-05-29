@@ -88,11 +88,17 @@ describe("mapWebhookEnvelope", () => {
     const events = mapWebhookEnvelope(envelope);
     expect(events).toHaveLength(1);
     const ev = events[0]!;
-    expect(ev.kind).toBe(KIND_WHATSAPP_MESSAGE);
-    expect(ev.id).toBe("whatsapp:PHONE_ID_1/wamid.ABC123");
-    expect(ev.occurred_at).toBe(new Date(1716000000 * 1000).toISOString());
+    expect(ev.event_id).toBe("whatsapp:PHONE_ID_1/wamid.ABC123");
+    // No triggerId supplied → null so the host can still log + drop deliberately.
+    expect(ev.trigger_id).toBeNull();
     expect(ev.action_hint).toBe("create_task");
-    const payload = ev.payload as { message: { text: { body: string } } };
+    const payload = ev.payload as {
+      kind: string;
+      occurred_at: string;
+      message: { text: { body: string } };
+    };
+    expect(payload.kind).toBe(KIND_WHATSAPP_MESSAGE);
+    expect(payload.occurred_at).toBe(new Date(1716000000 * 1000).toISOString());
     expect(payload.message.text.body).toBe("hello there");
   });
 
@@ -118,7 +124,7 @@ describe("mapWebhookEnvelope", () => {
       ],
     };
     const events = mapWebhookEnvelope(envelope);
-    expect(events.map((e) => e.id)).toEqual([
+    expect(events.map((e) => e.event_id)).toEqual([
       "whatsapp:P/m1",
       "whatsapp:P/m2",
       "whatsapp:P/m3",
@@ -173,6 +179,33 @@ describe("mapWebhookEnvelope", () => {
     expect(mapWebhookEnvelope(envelope)).toEqual([]);
   });
 
+  it("stamps the supplied trigger_id onto every emitted event", () => {
+    const envelope: MetaWebhookEnvelope = {
+      object: "whatsapp_business_account",
+      entry: [
+        {
+          changes: [
+            {
+              field: "messages",
+              value: {
+                metadata: { phone_number_id: "P" },
+                messages: [
+                  { id: "m1", type: "text", text: { body: "a" } },
+                  { id: "m2", type: "text", text: { body: "b" } },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    };
+    const events = mapWebhookEnvelope(envelope, "whatsapp-inbound");
+    expect(events).toHaveLength(2);
+    for (const ev of events) {
+      expect(ev.trigger_id).toBe("whatsapp-inbound");
+    }
+  });
+
   it("falls back to now when timestamp is missing", () => {
     const before = Date.now();
     const events = mapWebhookEnvelope({
@@ -190,7 +223,8 @@ describe("mapWebhookEnvelope", () => {
     });
     const after = Date.now();
     expect(events).toHaveLength(1);
-    const ts = Date.parse(events[0]!.occurred_at);
+    const payload = events[0]!.payload as { occurred_at: string };
+    const ts = Date.parse(payload.occurred_at);
     expect(ts).toBeGreaterThanOrEqual(before);
     expect(ts).toBeLessThanOrEqual(after);
   });

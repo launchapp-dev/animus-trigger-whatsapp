@@ -33,6 +33,17 @@ export interface WhatsAppConfig {
   webhookPort: number;
   webhookPath: string;
   graphApiBase: string;
+  /**
+   * Logical Animus trigger id stamped onto every emitted `TriggerEvent`.
+   * The daemon's `route_event` (see
+   * `crates/orchestrator-daemon-runtime/src/schedule/trigger_supervisor.rs:602`)
+   * drops events whose `trigger_id` is `None` — without this value, inbound
+   * WhatsApp messages have no matching workflow trigger to route to. Operators
+   * must set `WHATSAPP_TRIGGER_ID` to the `id` of the `WorkflowTrigger` in
+   * their `.animus/workflows.yaml`. May be empty until `trigger/watch` carries
+   * a `config.trigger_id` overlay.
+   */
+  triggerId: string;
 }
 
 function envStr(name: string): string {
@@ -56,6 +67,7 @@ export function loadConfigFromEnv(): WhatsAppConfig {
     webhookPort: parsePort(process.env["WHATSAPP_WEBHOOK_PORT"], DEFAULT_WEBHOOK_PORT),
     webhookPath: envStr("WHATSAPP_WEBHOOK_PATH") || DEFAULT_WEBHOOK_PATH,
     graphApiBase: envStr("WHATSAPP_GRAPH_API_BASE") || DEFAULT_GRAPH_API_BASE,
+    triggerId: envStr("WHATSAPP_TRIGGER_ID"),
   };
 }
 
