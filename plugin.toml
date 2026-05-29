@@ -9,7 +9,7 @@
 
 schema       = "animus.plugin.v1"
 name         = "animus-trigger-whatsapp"
-version      = "0.1.1"
+version      = "0.1.2"
 plugin_kind  = "trigger_backend"
 description  = "WhatsApp Business Cloud API trigger - inbound webhook receiver + outbound Graph API sender"
 protocol     = "stdio"

@@ -56,7 +56,7 @@ import {
 } from "./outbound.js";
 
 const PLUGIN_NAME = "animus-trigger-whatsapp";
-const PLUGIN_VERSION = "0.1.1";
+const PLUGIN_VERSION = "0.1.2";
 const PLUGIN_DESCRIPTION =
   "WhatsApp Business Cloud API trigger - inbound webhook receiver + outbound Graph API sender";
 

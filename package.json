@@ -1,6 +1,6 @@
 {
   "name": "@launchapp-dev/animus-trigger-whatsapp",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "WhatsApp Business Cloud API trigger plugin for Animus - inbound webhook + outbound Graph API send",
   "license": "Elastic-2.0",
   "type": "module",

@@ -3,6 +3,14 @@
 All notable changes to `@launchapp-dev/animus-trigger-whatsapp` are documented
 here. This project follows [Semantic Versioning](https://semver.org/).
 
+## 0.1.2 - 2026-05-28
+
+### Added
+
+- Tag-triggered GitHub Actions release pipeline that publishes Animus
+  installer-ready tarballs, sha256 sidecars, and cosign keyless signature
+  bundles for the standard macOS/Linux platform selectors.
+
 ## 0.1.1 - 2026-05-28
 
 ### Fixed
